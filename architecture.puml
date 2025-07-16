@@ -1,0 +1,87 @@
+@startuml architecture
+
+!include ./dist/AWSCommon.puml
+
+!include ./dist/Compute/EC2.puml
+' !include ./dist/Containers/EKSCloud.puml
+' !include ./dist/Analytics/ManagedStreamingforApacheKafka.puml
+!include ./dist/Storage/SimpleStorageService.puml
+' !include ./dist/Database/RDS.puml
+' !include ./dist/Database/DatabaseMigrationService.puml
+!include ./dist/SecurityIdentityCompliance/IdentityandAccessManagement.puml
+!include ./dist/SecurityIdentityCompliance/SecretsManager.puml
+!include ./dist/ManagementGovernance/SystemsManager.puml
+!include ./dist/EndUserComputing/WorkSpacesFamilyAmazonWorkSpaces.puml
+!include ./dist/DeveloperTools/CodeArtifact.puml
+!include ./dist/DeveloperTools/CodeDeploy.puml
+
+skinparam wrapWidth 300
+skinparam maxMessageSize 300
+
+' === Source Systems ===
+rectangle "IBM/File Sources" as FileSources
+' AWSDatabaseMigrationService(dms, "AWS DMS / CDC Tools")
+component "AWS DMS / CDC Tools" as dms
+' AmazonRDS(rdsOracle, "RDS Oracle (replica)")
+component "RDS Oracle (replica)" as rdsOracle
+' ManagedStreamingforApacheKafka(mmsk, "Kafka (MSK)")
+component "Kafka (MSK)" as mmsk
+
+FileSources --> dms
+rdsOracle --> mmsk
+
+' === Ingestion Layer ===
+' AmazonElasticKubernetesService(kafkaEks, "Kafka on EKS")
+component "Kafka on EKS" as kafkaEks
+dms --> kafkaEks
+
+' === Storage & Processing ===
+' AmazonSimpleStorageService(s3, "Amazon S3 (Datalake)")
+component "Amazon S3 (Datalake)" as s3
+' AmazonEC2(spark, "Apache Spark Jobs on EC2 (via EKS)")
+component "Apache Spark Jobs on EC2 (via EKS)" as spark
+rectangle "Apache Airflow" as airflow
+rectangle "Delta Lake" as delta
+' AmazonRDS(hive, "Hive Metastore (RDS PostgreSQL)")
+component "Hive Metastore (RDS PostgreSQL)" as hive
+
+kafkaEks --> s3
+mmsk --> s3
+airflow --> spark
+spark --> delta
+delta --> s3
+delta --> hive
+
+' === Client Tools ===
+rectangle "JupyterHub on EKS" as jupyter
+rectangle "Starburst on EKS" as starburst
+
+jupyter --> delta
+starburst --> delta
+
+' === Security & Access Control ===
+' AWSIdentityandAccessManagement(iam, "IAM Roles")
+component "IAM Roles" as iam
+' AWSSystemsManager(ssm, "SSM / HMS Keys")
+component "SSM / HMS Keys" as ssm
+' AWSSecretsManager(secrets, "Secrets Manager")
+component "Secrets Manager" as secrets
+' AmazonWorkSpaces(workspaces, "AWS Workspaces")
+component "AWS Workspaces" as workspaces
+
+iam --> s3
+ssm --> s3
+workspaces --> delta
+
+' === CI/CD and Deployment ===
+' AWSCodeArtifact(codeartifact, "Harbor / Nexus")
+component "Harbor / Nexus" as codeartifact
+' AWSCodeDeploy(cd, "App Deployment (ArgoCD)")
+component "App Deployment (ArgoCD)" as cd
+' AmazonElasticKubernetesService(eksDeploy, "EKS Deployment Target")
+component "EKS Deployment Target" as  eksDeploy
+
+codeartifact --> cd
+cd --> eksDeploy
+
+@enduml
